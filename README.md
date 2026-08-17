@@ -1,0 +1,44 @@
+# ComfyUI Dynamic LoRA Rank + Strength
+
+A standalone ComfyUI custom node that loads standard ComfyUI LoRAs and applies independent per-denoise-step rank and strength schedules.
+
+## Nodes
+
+- `Load LoRA (Dynamic Rank + Strength)`
+- `Load LoRA (Dynamic Rank + Strength, Model Only)`
+
+## Inputs
+
+```text
+rank_schedule     = 1,0.5,1,0
+strength_schedule = 1,0.5,1,0
+```
+
+`rank_schedule` masks the LoRA hidden rank. `strength_schedule` scales the complete LoRA output relative to `strength_model`. If the sampler has more steps than values, the final value repeats; extra values are ignored when the sampler has fewer steps. Values must be in `0..1`.
+
+For pure per-step strength control, use:
+
+```text
+rank_schedule     = 1
+strength_schedule = 1,0.5,1,0
+```
+
+Each dynamic node keeps its own schedules, so serially connected dynamic LoRA nodes are independent.
+
+## Compatibility
+
+The dynamic bypass path supports standard ComfyUI `LoRAAdapter` weights, including Anima-style `lora_up.weight` / `lora_down.weight` checkpoints and LoCon `mid` weights. DoRA/reshape metadata, non-LoRA adapter families, and sliced/tuple mappings fall back to ComfyUI's native static patch path with a warning; they are not dynamically scheduled.
+
+CLIP uses static `strength_clip` and full rank because CLIP encoding happens before denoising steps exist.
+
+## Development
+
+```powershell
+python -m unittest discover -s tests -p 'test_*.py'
+```
+
+The installed copy used by this workstation is:
+
+```text
+F:\SDComfyUI\custom_nodes\ComfyUI-DynamicLoraRank
+```
