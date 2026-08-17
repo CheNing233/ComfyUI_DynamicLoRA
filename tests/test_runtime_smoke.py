@@ -29,6 +29,15 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
         cls.ModelPatcher = ModelPatcher
         cls.LoRAAdapter = LoRAAdapter
 
+
+    def test_public_node_has_only_absolute_strength_schedule(self):
+        m = self.module
+        self.assertEqual(set(m.NODE_CLASS_MAPPINGS), {"DynamicLoraRankLoaderModelOnly"})
+        inputs = m.DynamicLoraRankLoaderModelOnly.INPUT_TYPES()["required"]
+        self.assertEqual(set(inputs), {"model", "lora_name", "rank_schedule", "strength_schedule"})
+        self.assertNotIn("strength_model", inputs)
+        self.assertNotIn("strength_clip", inputs)
+
     def test_transformer_linear_rank_mask_uses_last_axis(self):
         m = self.module
         up = torch.ones(2, 4)

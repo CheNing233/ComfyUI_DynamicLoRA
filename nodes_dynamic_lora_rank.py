@@ -296,102 +296,65 @@ def _rebuild_dynamic_injections(patcher, registry, is_clip=False):
             _add_model_step_wrapper(patcher)
 
 
-def _load_bypass_with_schedule(
-    model,
-    clip,
-    lora,
-    strength_model,
-    strength_clip,
-    rank_schedule,
-    strength_schedule,
-):
-    key_map = {}
-    if model is not None:
-        key_map = comfy.lora.model_lora_keys_unet(model.model, key_map)
-    if clip is not None:
-        key_map = comfy.lora.model_lora_keys_clip(clip.cond_stage_model, key_map)
-
+def _load_bypass_with_schedule(model, lora, rank_schedule, strength_schedule):
+    key_map = comfy.lora.model_lora_keys_unet(model.model, {})
     loaded = comfy.lora.load_lora(comfy.lora_convert.convert_lora(lora), key_map)
+    static_strength = float(strength_schedule[0]) if strength_schedule else 1.0
     scheduled_patches, regular_patches = _classify_loaded_patches(
         loaded,
         rank_schedule,
         strength_schedule,
     )
 
-    model_out = None
-    clip_out = None
+    model_out = model.clone()
+    if regular_patches:
+        # Unsupported adapter families retain native math with the first
+        # configured strength as their static fallback.
+        model_out.add_patches(regular_patches, static_strength)
 
-    if model is not None:
-        model_out = model.clone()
-        if regular_patches:
-            model_out.add_patches(regular_patches, strength_model)
-        registry = _copy_registry(model.get_attachment(_REGISTRY_ATTACHMENT))
-        model_keys = set(model_out.model.state_dict())
-        for key, adapter in scheduled_patches.items():
-            if _patch_key_exists(model_keys, key):
-                registry.setdefault(key, []).append(
-                    _new_scheduled_adapter(
-                        adapter,
-                        adapter.rank_schedule,
-                        adapter.strength_schedule,
-                        strength_model,
-                    )
+    registry = _copy_registry(model.get_attachment(_REGISTRY_ATTACHMENT))
+    model_keys = set(model_out.model.state_dict())
+    for key, adapter in scheduled_patches.items():
+        if _patch_key_exists(model_keys, key):
+            registry.setdefault(key, []).append(
+                _new_scheduled_adapter(
+                    adapter,
+                    adapter.rank_schedule,
+                    adapter.strength_schedule,
+                    1.0,
                 )
-        _rebuild_dynamic_injections(model_out, registry, is_clip=False)
-
-    if clip is not None:
-        clip_out = clip.clone()
-        if regular_patches:
-            clip_out.add_patches(regular_patches, strength_clip)
-        clip_patcher = clip_out.patcher
-        registry = _copy_registry(clip_patcher.get_attachment(_REGISTRY_ATTACHMENT))
-        clip_keys = set(clip_out.cond_stage_model.state_dict())
-        for key, adapter in scheduled_patches.items():
-            if _patch_key_exists(clip_keys, key):
-                registry.setdefault(key, []).append(
-                    _new_scheduled_adapter(
-                        adapter,
-                        adapter.rank_schedule,
-                        adapter.strength_schedule,
-                        strength_clip,
-                    )
-                )
-        _rebuild_dynamic_injections(clip_patcher, registry, is_clip=True)
+            )
+    _rebuild_dynamic_injections(model_out, registry, is_clip=False)
 
     for key in loaded:
         if key not in scheduled_patches and key not in regular_patches:
             LOGGER.warning("LoRA key %r was not loaded by the dynamic loader.", key)
 
-    return model_out, clip_out
+    return model_out
 
 
-class DynamicLoraRankLoader:
+class DynamicLoraRankLoaderModelOnly:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "model": ("MODEL", {"tooltip": "The diffusion model to modify."}),
-                "clip": ("CLIP", {"tooltip": "The CLIP model to modify."}),
                 "lora_name": (folder_paths.get_filename_list("loras"), {"tooltip": "The native ComfyUI LoRA file."}),
-                "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                "strength_clip": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                "rank_schedule": ("STRING", {"default": "1.0", "multiline": False, "tooltip": "Per-step rank ratios, e.g. 1,0.5,1,0. Missing steps repeat the last value."}),
-                "strength_schedule": ("STRING", {"default": "1.0", "multiline": False, "tooltip": "Per-step strength multipliers relative to strength_model, e.g. 1,0.5,1,0."}),
+                "rank_schedule": ("STRING", {"default": "1.0", "multiline": False, "tooltip": "Per-step rank ratios, e.g. 1,0.5,1,0."}),
+                "strength_schedule": ("STRING", {"default": "1.0", "multiline": False, "tooltip": "Absolute per-step LoRA strengths, e.g. 1,0.5,1,0."}),
             }
         }
 
-    RETURN_TYPES = ("MODEL", "CLIP")
-    FUNCTION = "load_lora"
+    RETURN_TYPES = ("MODEL",)
+    FUNCTION = "load_model_only"
     CATEGORY = "model/loaders"
-    DESCRIPTION = "Native LoRA loader with per-denoise-step rank and strength schedules."
-    SEARCH_ALIASES = ["dynamic lora rank", "scheduled lora", "t lora", "rank lora"]
+    DESCRIPTION = "Native model-only LoRA loader with per-denoise-step rank and absolute strength schedules."
+    SEARCH_ALIASES = ["dynamic lora", "dynamic lora rank", "scheduled lora", "t lora"]
 
     def __init__(self):
         self.loaded_lora = None
 
-    def load_lora(self, model, clip, lora_name, strength_model, strength_clip, rank_schedule, strength_schedule="1.0"):
-        if strength_model == 0 and strength_clip == 0:
-            return model, clip
+    def load_model_only(self, model, lora_name, rank_schedule, strength_schedule="1.0"):
         rank_values = parse_ratio_schedule(rank_schedule, "rank_schedule")
         strength_values = parse_ratio_schedule(strength_schedule, "strength_schedule")
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
@@ -401,58 +364,21 @@ class DynamicLoraRankLoader:
         else:
             lora, metadata = self.loaded_lora[1], self.loaded_lora[2]
 
-        model_out, clip_out = _load_bypass_with_schedule(
+        model_out = _load_bypass_with_schedule(
             model,
-            clip,
             lora,
-            strength_model,
-            strength_clip,
             rank_values,
             strength_values,
         )
         if metadata:
-            if model_out is not None:
-                model_out.set_attachments("lora_metadata", metadata)
-            if clip_out is not None:
-                clip_out.patcher.set_attachments("lora_metadata", metadata)
-        return model_out, clip_out
-
-
-class DynamicLoraRankLoaderModelOnly(DynamicLoraRankLoader):
-    @classmethod
-    def INPUT_TYPES(cls):
-        return {
-            "required": {
-                "model": ("MODEL",),
-                "lora_name": (folder_paths.get_filename_list("loras"),),
-                "strength_model": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                "rank_schedule": ("STRING", {"default": "1.0", "multiline": False}),
-                "strength_schedule": ("STRING", {"default": "1.0", "multiline": False}),
-            }
-        }
-
-    RETURN_TYPES = ("MODEL",)
-    FUNCTION = "load_model_only"
-
-    def load_model_only(self, model, lora_name, strength_model, rank_schedule, strength_schedule="1.0"):
-        model_out, _ = self.load_lora(
-            model,
-            None,
-            lora_name,
-            strength_model,
-            0.0,
-            rank_schedule,
-            strength_schedule,
-        )
+            model_out.set_attachments("lora_metadata", metadata)
         return (model_out,)
 
 
 NODE_CLASS_MAPPINGS = {
-    "DynamicLoraRankLoader": DynamicLoraRankLoader,
     "DynamicLoraRankLoaderModelOnly": DynamicLoraRankLoaderModelOnly,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "DynamicLoraRankLoader": "Load LoRA (Dynamic Rank + Strength)",
-    "DynamicLoraRankLoaderModelOnly": "Load LoRA (Dynamic Rank + Strength, Model Only)",
+    "DynamicLoraRankLoaderModelOnly": "Load LoRA (Dynamic Rank + Strength)",
 }

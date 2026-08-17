@@ -1,11 +1,16 @@
 # ComfyUI Dynamic LoRA Rank + Strength
 
-A standalone ComfyUI custom node that loads standard ComfyUI LoRAs and applies independent per-denoise-step rank and strength schedules.
+A standalone ComfyUI custom node that loads standard ComfyUI LoRAs and applies independent per-denoise-step rank and absolute strength schedules.
 
-## Nodes
+## Node
 
-- `Load LoRA (Dynamic Rank + Strength)`
-- `Load LoRA (Dynamic Rank + Strength, Model Only)`
+Only one public node is registered:
+
+```text
+Load LoRA (Dynamic Rank + Strength)
+```
+
+It is model-only, matching the Anima workflow usage.
 
 ## Inputs
 
@@ -14,7 +19,7 @@ rank_schedule     = 1,0.5,1,0
 strength_schedule = 1,0.5,1,0
 ```
 
-`rank_schedule` masks the LoRA hidden rank. `strength_schedule` scales the complete LoRA output relative to `strength_model`. If the sampler has more steps than values, the final value repeats; extra values are ignored when the sampler has fewer steps. Values must be in `0..1`.
+`rank_schedule` masks the LoRA hidden rank. `strength_schedule` is the absolute LoRA strength at each denoise step. There is no separate `strength_model` input anymore.
 
 For pure per-step strength control, use:
 
@@ -22,6 +27,8 @@ For pure per-step strength control, use:
 rank_schedule     = 1
 strength_schedule = 1,0.5,1,0
 ```
+
+If the sampler has more steps than values, the final value repeats; extra values are ignored when the sampler has fewer steps. Values must be in `0..1`.
 
 Each dynamic node keeps its own schedules, so serially connected dynamic LoRA nodes are independent.
 
@@ -31,9 +38,9 @@ The implementation uses one stable `PREDICT_NOISE` wrapper and one stable bypass
 
 ## Compatibility
 
-The dynamic bypass path supports standard ComfyUI `LoRAAdapter` weights, including Anima-style `lora_up.weight` / `lora_down.weight` checkpoints and LoCon `mid` weights. DoRA/reshape metadata, non-LoRA adapter families, and sliced/tuple mappings fall back to ComfyUI's native static patch path with a warning; they are not dynamically scheduled.
+The dynamic bypass path supports standard ComfyUI `LoRAAdapter` weights, including Anima-style `lora_up.weight` / `lora_down.weight` checkpoints and LoCon `mid` weights. DoRA/reshape metadata, non-LoRA adapter families, and sliced/tuple mappings fall back to ComfyUI's native static patch path using the first strength value, with a warning; they are not dynamically scheduled.
 
-CLIP uses static `strength_clip` and full rank because CLIP encoding happens before denoising steps exist.
+CLIP is not part of this model-only node.
 
 ## Development
 
