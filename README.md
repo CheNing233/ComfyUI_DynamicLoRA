@@ -25,6 +25,10 @@ strength_schedule = 1,0.5,1,0
 
 Each dynamic node keeps its own schedules, so serially connected dynamic LoRA nodes are independent.
 
+## Multi-stage sampling compatibility
+
+The implementation uses one stable `PREDICT_NOISE` wrapper and one stable bypass injection group per model patcher. Serial dynamic LoRAs are aggregated per target module, and the same model can be sampled again after a first KSampler stage (for example, an Ultimate SD Upscale subgraph) without stacking multiple bypass hooks on the same Linear layer.
+
 ## Compatibility
 
 The dynamic bypass path supports standard ComfyUI `LoRAAdapter` weights, including Anima-style `lora_up.weight` / `lora_down.weight` checkpoints and LoCon `mid` weights. DoRA/reshape metadata, non-LoRA adapter families, and sliced/tuple mappings fall back to ComfyUI's native static patch path with a warning; they are not dynamically scheduled.

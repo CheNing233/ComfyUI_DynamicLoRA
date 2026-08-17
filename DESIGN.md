@@ -4,6 +4,10 @@
 
 The loader keeps ComfyUI's native key mapping and file conversion, but sends only standard `LoRAAdapter` weights through `BypassInjectionManager`. Each scheduled adapter stores its own rank and strength schedules. A lightweight `PREDICT_NOISE` wrapper publishes only the current sampler step index through thread-local state; this allows serial dynamic LoRA nodes to remain independent.
 
+## Multi-stage sampling
+
+A model may be sampled more than once in one graph. The plugin therefore stores all scheduled adapters in one model-patcher registry, aggregates adapters by target module, and keeps one stable bypass injection group. Before replacing that group it ejects the active group, preventing `original_forward` from pointing at a previous bypass wrapper.
+
 ## Broadcast axes
 
 - Linear outputs use `[..., rank]`, so the mask is shaped with rank on the last axis.

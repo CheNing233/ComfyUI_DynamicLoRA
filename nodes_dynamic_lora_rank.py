@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import threading
-import uuid
 from typing import Any
 
 import folder_paths
@@ -25,8 +24,9 @@ except ImportError:
 
 
 LOGGER = logging.getLogger("ComfyUI-DynamicLoraRank")
-_INJECTION_KEY_PREFIX = "dynamic_lora_rank_bypass"
-_WRAPPER_KEY_PREFIX = "dynamic_lora_rank_step_wrapper"
+_INJECTION_KEY = "dynamic_lora_rank_bypass"
+_WRAPPER_KEY = "dynamic_lora_rank_step_wrapper"
+_REGISTRY_ATTACHMENT = "dynamic_lora_rank_registry"
 _STEP_STATE = threading.local()
 _MISSING = object()
 
@@ -82,11 +82,12 @@ def _rank_mask(
 class ScheduledLoRAAdapter(LoRAAdapter):
     """Standard native LoRA adapter with per-step rank and strength controls."""
 
-    def __init__(self, source: LoRAAdapter, rank_schedule, strength_schedule):
+    def __init__(self, source: LoRAAdapter, rank_schedule, strength_schedule, base_strength: float = 1.0):
         self.loaded_keys = source.loaded_keys
         self.weights = source.weights
         self.rank_schedule = tuple(rank_schedule)
         self.strength_schedule = tuple(strength_schedule)
+        self.base_strength = float(base_strength)
 
     def _schedule_values(self) -> tuple[float | None, float]:
         step_index = _get_current_step()
@@ -108,7 +109,7 @@ class ScheduledLoRAAdapter(LoRAAdapter):
         scale = (alpha / rank) if alpha is not None else 1.0
         scale *= getattr(self, "multiplier", 1.0)
         rank_ratio, strength_ratio = self._schedule_values()
-        scale *= strength_ratio
+        scale *= self.base_strength * strength_ratio
 
         orig_dtype = x.dtype
         up = up.to(dtype=x.dtype, device=x.device)
@@ -171,8 +172,47 @@ def _predict_noise_step_wrapper(executor, x, timestep, model_options=None, seed=
         _restore_current_step(previous)
 
 
-def _new_scheduled_adapter(source: LoRAAdapter, rank_schedule, strength_schedule):
-    return ScheduledLoRAAdapter(source, rank_schedule, strength_schedule)
+class CompositeScheduledAdapter(comfy.weight_adapter.WeightAdapterBase):
+    """Combines multiple standard LoRAs into one hook for a target module."""
+
+    def __init__(self, adapters):
+        self.adapters = list(adapters)
+        self.loaded_keys = set()
+        for adapter in self.adapters:
+            self.loaded_keys.update(adapter.loaded_keys)
+        self.weights = ()
+
+    def _sync_runtime_attributes(self):
+        for adapter in self.adapters:
+            adapter.multiplier = 1.0
+            adapter.is_conv = self.is_conv
+            adapter.conv_dim = self.conv_dim
+            adapter.kernel_size = self.kernel_size
+            adapter.in_channels = self.in_channels
+            adapter.out_channels = self.out_channels
+            adapter.kw_dict = self.kw_dict
+
+    def h(self, x: torch.Tensor, base_out: torch.Tensor) -> torch.Tensor:
+        self._sync_runtime_attributes()
+        output = torch.zeros_like(base_out)
+        for adapter in self.adapters:
+            output = output + adapter.h(x, base_out)
+        return output
+
+    def g(self, y: torch.Tensor) -> torch.Tensor:
+        return y
+
+
+def _new_scheduled_adapter(source: LoRAAdapter, rank_schedule, strength_schedule, base_strength: float = 1.0):
+    return ScheduledLoRAAdapter(source, rank_schedule, strength_schedule, base_strength)
+
+
+def _copy_registry(registry):
+    return {key: list(adapters) for key, adapters in (registry or {}).items()}
+
+
+def _patch_key_exists(keys, key) -> bool:
+    return key in keys or (isinstance(key, str) and f"{key}.weight" in keys)
 
 
 def _classify_loaded_patches(loaded: dict, rank_schedule, strength_schedule):
@@ -217,12 +257,43 @@ def _classify_loaded_patches(loaded: dict, rank_schedule, strength_schedule):
 
 
 def _add_model_step_wrapper(model_patcher) -> None:
-    key = f"{_WRAPPER_KEY_PREFIX}_{uuid.uuid4().hex}"
-    model_patcher.add_wrapper_with_key(
+    wrappers = model_patcher.get_wrappers(
         comfy.patcher_extension.WrappersMP.PREDICT_NOISE,
-        key,
-        _predict_noise_step_wrapper,
+        _WRAPPER_KEY,
     )
+    if not wrappers:
+        model_patcher.add_wrapper_with_key(
+            comfy.patcher_extension.WrappersMP.PREDICT_NOISE,
+            _WRAPPER_KEY,
+            _predict_noise_step_wrapper,
+        )
+
+
+def _rebuild_dynamic_injections(patcher, registry, is_clip=False):
+    """Replace the plugin's single injection group without stacking hooks."""
+    if patcher.is_injected and _INJECTION_KEY in patcher.injections:
+        patcher.eject_model()
+    patcher.remove_injections(_INJECTION_KEY)
+    patcher.set_attachments(_REGISTRY_ATTACHMENT, registry)
+
+    if not registry:
+        return
+
+    manager = comfy.weight_adapter.BypassInjectionManager()
+    model_keys = set(patcher.model.state_dict())
+    for key, adapters in registry.items():
+        key_exists = _patch_key_exists(model_keys, key)
+        if not key_exists:
+            LOGGER.warning("Dynamic LoRA key %r was not found in the %s model; skipping injection.", key, "CLIP" if is_clip else "diffusion")
+            continue
+        manager.add_adapter(key, CompositeScheduledAdapter(adapters), strength=1.0)
+
+    target = patcher.model
+    injections = manager.create_injections(target)
+    if manager.get_hook_count() > 0:
+        patcher.set_injections(_INJECTION_KEY, injections)
+        if not is_clip:
+            _add_model_step_wrapper(patcher)
 
 
 def _load_bypass_with_schedule(
@@ -254,54 +325,38 @@ def _load_bypass_with_schedule(
         model_out = model.clone()
         if regular_patches:
             model_out.add_patches(regular_patches, strength_model)
-
-        manager = comfy.weight_adapter.BypassInjectionManager()
+        registry = _copy_registry(model.get_attachment(_REGISTRY_ATTACHMENT))
         model_keys = set(model_out.model.state_dict())
         for key, adapter in scheduled_patches.items():
-            if key in model_keys:
-                manager.add_adapter(
-                    key,
+            if _patch_key_exists(model_keys, key):
+                registry.setdefault(key, []).append(
                     _new_scheduled_adapter(
                         adapter,
                         adapter.rank_schedule,
                         adapter.strength_schedule,
-                    ),
-                    strength=strength_model,
+                        strength_model,
+                    )
                 )
-            else:
-                LOGGER.warning("Dynamic LoRA key %r was not found in the model; skipping model bypass injection.", key)
-
-        injections = manager.create_injections(model_out.model)
-        if manager.get_hook_count() > 0:
-            model_out.set_injections(f"{_INJECTION_KEY_PREFIX}_{uuid.uuid4().hex}", injections)
-            _add_model_step_wrapper(model_out)
+        _rebuild_dynamic_injections(model_out, registry, is_clip=False)
 
     if clip is not None:
         clip_out = clip.clone()
         if regular_patches:
             clip_out.add_patches(regular_patches, strength_clip)
-
-        manager = comfy.weight_adapter.BypassInjectionManager()
+        clip_patcher = clip_out.patcher
+        registry = _copy_registry(clip_patcher.get_attachment(_REGISTRY_ATTACHMENT))
         clip_keys = set(clip_out.cond_stage_model.state_dict())
         for key, adapter in scheduled_patches.items():
-            if key in clip_keys:
-                # No sampler step exists during CLIP encoding, so the adapter
-                # naturally uses full rank and dynamic strength 1.0.
-                manager.add_adapter(
-                    key,
+            if _patch_key_exists(clip_keys, key):
+                registry.setdefault(key, []).append(
                     _new_scheduled_adapter(
                         adapter,
                         adapter.rank_schedule,
                         adapter.strength_schedule,
-                    ),
-                    strength=strength_clip,
+                        strength_clip,
+                    )
                 )
-            else:
-                LOGGER.debug("Dynamic LoRA key %r is not a CLIP key; skipping CLIP bypass injection.", key)
-
-        injections = manager.create_injections(clip_out.cond_stage_model)
-        if manager.get_hook_count() > 0:
-            clip_out.patcher.set_injections(f"{_INJECTION_KEY_PREFIX}_{uuid.uuid4().hex}", injections)
+        _rebuild_dynamic_injections(clip_patcher, registry, is_clip=True)
 
     for key in loaded:
         if key not in scheduled_patches and key not in regular_patches:
