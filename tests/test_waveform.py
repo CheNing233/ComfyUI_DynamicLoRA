@@ -24,6 +24,10 @@ class WaveformTests(unittest.TestCase):
         self.assertEqual(waveform.generate_waveform(4, "square", cycles=2, decimals=6), (1.0, 0.0, 1.0, 0.0))
         self.assertEqual(waveform.generate_waveform(4, "pulse", cycles=1, pulse_start=0.0, pulse_end=0.5, decimals=6), (1.0, 1.0, 0.0, 0.0))
 
+    def test_waveform_rejects_values_outside_lora_range(self):
+        with self.assertRaisesRegex(ValueError, "between 0 and 1"):
+            waveform.generate_waveform(4, "linear_up", start_value=-0.1)
+
     def test_format_and_parse(self):
         text = waveform.format_schedule((1.0, 0.5, 0.0), 4)
         self.assertEqual(text, "1,0.5,0")

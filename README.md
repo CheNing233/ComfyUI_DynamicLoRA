@@ -42,6 +42,8 @@ strength_schedule
 0.0 → 关闭 LoRA
 ```
 
+rank 数量使用“四舍五入，`.5` 向上”的规则计算；例如总 rank 为 3、比例为 0.5 时激活 2 个 rank。
+
 #### strength_schedule
 
 绝对的每步 LoRA strength：

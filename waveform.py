@@ -53,6 +53,8 @@ def generate_waveform(
     values = [float(start_value), float(end_value), float(min_value), float(max_value)]
     if not all(math.isfinite(value) for value in values):
         raise ValueError("waveform values must be finite numbers")
+    if not all(0.0 <= value <= 1.0 for value in values):
+        raise ValueError("waveform values must be between 0 and 1")
     if min_value > max_value:
         raise ValueError("min_value cannot be greater than max_value")
     if not math.isfinite(float(phase)) or not math.isfinite(float(cycles)):
@@ -122,7 +124,7 @@ def parse_numeric_schedule(value: str, min_value: float | None = None, max_value
             raise ValueError(f"step {index} is not a number: {token!r}") from exc
         if not math.isfinite(number):
             raise ValueError(f"step {index} is not finite: {token!r}")
-        if min_value is not None and number < min_value or max_value is not None and number > max_value:
+        if (min_value is not None and number < min_value) or (max_value is not None and number > max_value):
             raise ValueError(f"step {index} is outside the allowed range [{min_value}, {max_value}]: {token!r}")
         values.append(number)
     return tuple(values)
