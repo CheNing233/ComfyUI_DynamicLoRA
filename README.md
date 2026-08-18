@@ -95,13 +95,17 @@ end_step
 ```text
 schedule
 flow_shift
+invert
 ```
 
 Anima 默认使用：
 
 ```text
 flow_shift = 3.0
+invert = true
 ```
+
+Anima 原生 shift=3 已经让高噪声区域拥有更多采样密度，因此本节点默认用 `invert=true` 把 schedule 取值向低噪声侧补偿。
 
 例如原始 schedule：
 
@@ -109,11 +113,15 @@ flow_shift = 3.0
 0,0.5,1
 ```
 
-使用 `flow_shift=3` 后，中间取值会被拉回高噪声侧，仍然保持相同的 step 数量。`flow_shift=1` 表示不改变 schedule。
+使用 `flow_shift=3, invert=true` 后，中间值会向低噪声侧移动；使用 `invert=false` 则是向高噪声侧移动。`flow_shift=1` 表示不改变 schedule。
 
 内部关系为：
 
 ```text
+invert=true:
+source_progress = shift * progress / (1 + (shift - 1) * progress)
+
+invert=false:
 noise = 1 - progress
 shifted_noise = shift * noise / (1 + (shift - 1) * noise)
 source_progress = 1 - shifted_noise

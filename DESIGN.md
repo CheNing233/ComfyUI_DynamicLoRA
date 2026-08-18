@@ -21,7 +21,7 @@ Linear, cosine, exponential, and logarithmic curves interpolate between `left_va
 
 ## Flow-shift remapper
 
-`XCN_FlowShiftSchedule` applies the local Anima `ModelSamplingDiscreteFlow` mapping. With `shift=3.0`, each output step samples an earlier normalized progress, keeping high-noise schedule values active longer. `shift=1.0` is identity.
+`XCN_FlowShiftSchedule` applies the local Anima `ModelSamplingDiscreteFlow` mapping. With `shift=3.0` and `invert=True`, each output step samples a later normalized progress to compensate toward low noise; `invert=False` selects the opposite high-noise pull. `shift=1.0` is identity.
 
 ## Preview renderer
 

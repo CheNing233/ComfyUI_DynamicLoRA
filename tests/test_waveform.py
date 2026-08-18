@@ -39,11 +39,14 @@ class WaveformTests(unittest.TestCase):
     def test_flow_shift_identity_and_high_noise_pull(self):
         values = (0.0, 0.25, 0.5, 0.75, 1.0)
         self.assertEqual(waveform.flow_shift_schedule(values, 1.0), values)
-        shifted = waveform.flow_shift_schedule(values, 3.0)
-        self.assertEqual(shifted[0], 0.0)
-        self.assertEqual(shifted[-1], 1.0)
-        self.assertLess(shifted[2], values[2])
-        self.assertLess(shifted[3], values[3])
+        high_noise_pull = waveform.flow_shift_schedule(values, 3.0, invert=False)
+        low_noise_pull = waveform.flow_shift_schedule(values, 3.0, invert=True)
+        self.assertEqual(high_noise_pull[0], 0.0)
+        self.assertEqual(high_noise_pull[-1], 1.0)
+        self.assertEqual(low_noise_pull[0], 0.0)
+        self.assertEqual(low_noise_pull[-1], 1.0)
+        self.assertLess(high_noise_pull[2], values[2])
+        self.assertGreater(low_noise_pull[2], values[2])
 
     def test_format_and_parse(self):
         text = waveform.format_schedule((1.0, 0.5, 0.0), 4)

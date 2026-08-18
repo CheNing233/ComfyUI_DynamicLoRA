@@ -148,12 +148,14 @@ def generate_monotonic_schedule(
 
 
 
-def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, decimals: int = 6) -> tuple[float, ...]:
+def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, invert: bool = True, decimals: int = 6) -> tuple[float, ...]:
     """Remap values with the Anima/Flow discrete-flow shift toward high noise.
 
     ``progress=0`` is the first/high-noise step and ``progress=1`` is the
-    final/low-noise step. A shift greater than one samples an earlier source
-    progress, so high-noise values persist for longer.
+    final/low-noise step. With ``invert=True`` (the recommended Anima
+    compensation), a shift greater than one samples a later source progress,
+    pulling values toward the low-noise side. ``invert=False`` applies the
+    opposite high-noise pull.
     """
     values = tuple(float(value) for value in values)
     if not values:
@@ -170,9 +172,13 @@ def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, decima
     last_index = len(values) - 1
     for index in range(len(values)):
         progress = index / float(last_index)
-        noise = 1.0 - progress
-        shifted_noise = flow_shift * noise / (1.0 + (flow_shift - 1.0) * noise)
-        source_progress = _clamp(1.0 - shifted_noise)
+        if invert:
+            source_progress = flow_shift * progress / (1.0 + (flow_shift - 1.0) * progress)
+        else:
+            noise = 1.0 - progress
+            shifted_noise = flow_shift * noise / (1.0 + (flow_shift - 1.0) * noise)
+            source_progress = 1.0 - shifted_noise
+        source_progress = _clamp(source_progress)
         source_position = source_progress * last_index
         left = int(math.floor(source_position))
         right = min(last_index, left + 1)

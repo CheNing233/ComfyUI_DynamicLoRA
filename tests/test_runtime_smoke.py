@@ -51,9 +51,9 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
 
 
     def test_flow_shift_node_uses_anima_default(self):
-        output = self.module.XCN_FlowShiftSchedule().remap("0,0.5,1", 3.0, 6)
+        output = self.module.XCN_FlowShiftSchedule().remap("0,0.5,1", 3.0, True, 6)
         self.assertEqual(len(output[0].split(",")), 3)
-        self.assertTrue(float(output[0].split(",")[1]) < 0.5)
+        self.assertTrue(float(output[0].split(",")[1]) > 0.5)
 
     def test_waveform_nodes_output_loader_compatible_strings(self):
         oscillation = self.module.XCN_OscillationSchedule().generate(4, "square", 0.0, 0.5, 0.5, 2.0, 0.0, 1.0, 1, 0, 6)

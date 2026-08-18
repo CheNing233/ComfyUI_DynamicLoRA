@@ -468,6 +468,7 @@ class XCN_FlowShiftSchedule:
             "required": {
                 "schedule": ("STRING", {"default": "1,0.5,1,0", "multiline": False}),
                 "flow_shift": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "tooltip": "Anima uses shift=3.0 by default."}),
+                "invert": ("BOOLEAN", {"default": True, "tooltip": "Pull values toward low-noise steps. Recommended for compensating Anima's native shift."}),
                 "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
             }
         }
@@ -478,9 +479,9 @@ class XCN_FlowShiftSchedule:
     CATEGORY = "XCN/Schedule"
     DESCRIPTION = "Remap a discrete schedule with Anima flow shift, pulling values toward high-noise steps."
 
-    def remap(self, schedule, flow_shift, decimals):
+    def remap(self, schedule, flow_shift, invert, decimals):
         values = parse_numeric_schedule(schedule, 0.0, 1.0)
-        return (format_schedule(flow_shift_schedule(values, flow_shift, decimals), decimals),)
+        return (format_schedule(flow_shift_schedule(values, flow_shift, invert, decimals), decimals),)
 
 
 class XCN_SchedulePreview:
