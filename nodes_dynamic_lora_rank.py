@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import threading
 from typing import Any
 
@@ -406,7 +407,7 @@ class XCN_OscillationSchedule:
                 "waveform": (list(OSCILLATION_WAVEFORMS), {"default": "cosine"}),
                 "x_cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.1}),
                 "y_offset": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "amplitude": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "amplitude": ("FLOAT", {"default": 0.5, "min": -1.0, "max": 1.0, "step": 0.01}),
                 "min_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "max_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
@@ -482,7 +483,14 @@ class XCN_SchedulePreview:
             import torch
             array = np.asarray(image).astype(np.float32) / 255.0
             tensor = torch.from_numpy(array)[None, ...]
-            return (tensor,)
+            temp_dir = folder_paths.get_temp_directory()
+            full_output_folder, filename, counter, subfolder, _ = folder_paths.get_save_image_path(
+                "XCN_SchedulePreview", temp_dir, image.width, image.height
+            )
+            file = f"{filename}_{counter:05}_.png"
+            image.save(os.path.join(full_output_folder, file))
+            ui_image = {"filename": file, "subfolder": subfolder, "type": "temp"}
+            return {"ui": {"images": [ui_image]}, "result": (tensor,)}
         except ValueError as exc:
             import torch
             blank = torch.ones((1, 96, 640, 3), dtype=torch.float32)

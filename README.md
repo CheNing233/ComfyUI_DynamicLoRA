@@ -2,13 +2,13 @@
 
 作者：xChenNing
 
-一个面向 ComfyUI 原生 LoRA 与 Anima 的离散采样步调度插件。所有公开节点统一使用 `XCN_` 前缀。
+面向 ComfyUI 原生 LoRA 与 Anima 的离散采样步调度插件。所有公开节点统一使用 `XCN_` 前缀。
 
 ## 节点
 
 ### XCN_DynamicLoraLoader
 
-唯一的动态 LoRA 加载节点，输入：
+唯一的动态 LoRA 加载节点：
 
 ```text
 model
@@ -26,9 +26,9 @@ strength_schedule = 1,0.8,1,0
 
 ### XCN_OscillationSchedule
 
-专门生成方波或余弦震荡 schedule。
+用于生成方波或余弦震荡 schedule。
 
-核心参数：
+输入：
 
 ```text
 steps
@@ -36,11 +36,13 @@ waveform: square / cosine
 x_cycles
 y_offset
 amplitude
-min_value / max_value
-start_step / end_step
+min_value
+max_value
+start_step
+end_step
 ```
 
-`start_step` 与 `end_step` 使用从 1 开始的 step 编号；`end_step=0` 表示最后一步。生效区间之外输出 0。输出始终是离散 step 值。
+`x_cycles` 是生效区间内的周期数；`y_offset` 是中心线；`amplitude` 是振幅；`min_value` / `max_value` 是最终裁剪范围。`start_step` 和 `end_step` 使用从 1 开始的 step 编号，`end_step=0` 表示最后一步。生效区间外输出 0。
 
 例如：
 
@@ -60,7 +62,7 @@ amplitude = 0.5
 
 ### XCN_MonotonicSchedule
 
-专门生成单调曲线：
+用于生成单调变化 schedule：
 
 ```text
 linear
@@ -69,7 +71,7 @@ exponential
 logarithmic
 ```
 
-核心参数：
+输入：
 
 ```text
 steps
@@ -84,43 +86,42 @@ end_step
 
 ### XCN_SchedulePreview
 
-输入 schedule 字符串，输出一张图：
+输入 schedule 字符串，输出一张图。图中只有一组 X/Y 坐标：
 
-- 平滑趋势线；
-- 所有离散 step 的实际取值点；
-- 离散点与趋势线使用同一组 X/Y 坐标；
-- 底部列出每个 step 的具体数值。
+- 蓝色平滑趋势线；
+- 橙色离散 step 折线与圆点；
+- 每个离散点的竖向辅助线；
+- 底部列出每个 step 的具体取值。
 
-例如：
+平滑线只用于观察趋势，实际控制仍然使用橙色离散点。
 
-```text
-step 0001: 1
-step 0002: 0.5
-step 0003: 1
-step 0004: 0
-```
+如果字符串解析失败或数值超出 `[0,1]`，不生成正常曲线，而是显示中文失败文案。
 
-如果解析失败或数值超出 `[0,1]`，预览节点不显示正常曲线，而显示中文错误文案。
+## 值域与 step 语义
 
-## 波形与值域
-
-所有用于 LoRA rank/strength 的输出值限制在：
+所有用于 LoRA rank/strength 的值都限制在：
 
 ```text
 0 <= value <= 1
 ```
 
-周期型震荡采用离散 step 的半开区间采样，避免最后一个 step 重复第一 phase。
+周期型震荡采用离散 step 的半开区间采样，例如 4 步、2 周期的方波为：
+
+```text
+1,0,1,0
+```
 
 ## Anima 多阶段采样
 
-插件使用单一稳定的 step wrapper 和单一稳定 injection group。多个动态 LoRA 会按目标模块聚合，支持同一个模型经过多个 KSampler 阶段，例如：
+插件使用单一稳定的 step wrapper 和单一稳定 injection group。多个动态 LoRA 会按目标模块聚合，支持：
 
 ```text
 KSampler
   → Ultimate SD Upscale
       → 第二个 KSampler
 ```
+
+两个采样阶段可以复用同一个模型。
 
 ## 原生兼容
 
