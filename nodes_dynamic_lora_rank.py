@@ -22,9 +22,25 @@ try:
 except ImportError:
     from schedule import parse_ratio_schedule, ratio_for_step, step_index_for_sigma, active_rank
 try:
-    from .waveform import WAVEFORM_NAMES, format_schedule, format_step_preview, generate_waveform, parse_numeric_schedule
+    from .waveform import (
+        MONOTONIC_CURVES,
+        OSCILLATION_WAVEFORMS,
+        format_schedule,
+        generate_monotonic_schedule,
+        generate_oscillation_schedule,
+        parse_numeric_schedule,
+        render_schedule_preview,
+    )
 except ImportError:
-    from waveform import WAVEFORM_NAMES, format_schedule, format_step_preview, generate_waveform, parse_numeric_schedule
+    from waveform import (
+        MONOTONIC_CURVES,
+        OSCILLATION_WAVEFORMS,
+        format_schedule,
+        generate_monotonic_schedule,
+        generate_oscillation_schedule,
+        parse_numeric_schedule,
+        render_schedule_preview,
+    )
 
 
 LOGGER = logging.getLogger("ComfyUI-DynamicLoraRank")
@@ -339,7 +355,7 @@ def _load_bypass_with_schedule(model, lora, rank_schedule, strength_schedule):
     return model_out
 
 
-class DynamicLoraRankLoaderModelOnly:
+class XCN_DynamicLoraLoader:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -381,53 +397,67 @@ class DynamicLoraRankLoaderModelOnly:
         return (model_out,)
 
 
-class DynamicLoraWaveformGenerator:
+class XCN_OscillationSchedule:
     @classmethod
     def INPUT_TYPES(cls):
         return {
             "required": {
                 "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
-                "waveform": (list(WAVEFORM_NAMES), {"default": "linear_down"}),
-                "start_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "end_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "waveform": (list(OSCILLATION_WAVEFORMS), {"default": "cosine"}),
+                "x_cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.1}),
+                "y_offset": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "amplitude": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "min_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "max_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "phase": ("FLOAT", {"default": 0.0, "min": -100.0, "max": 100.0, "step": 0.01}),
-                "cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.01}),
-                "duty_cycle": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "pulse_start": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "pulse_end": ("FLOAT", {"default": 0.75, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "invert": ("BOOLEAN", {"default": False}),
-                "decimals": ("INT", {"default": 4, "min": 0, "max": 12, "step": 1}),
+                "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
+                "end_step": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1, "tooltip": "0 means the last step."}),
+                "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
             }
         }
 
     RETURN_TYPES = ("STRING",)
     RETURN_NAMES = ("schedule",)
     FUNCTION = "generate"
-    CATEGORY = "Dynamic LoRA/Schedule"
-    DESCRIPTION = "Generate a discrete per-step waveform string for rank_schedule or strength_schedule."
+    CATEGORY = "XCN/Schedule"
+    DESCRIPTION = "Generate a square or cosine oscillation schedule using x cycles, y offset, amplitude, clipping, and an active step window."
 
-    def generate(self, steps, waveform, start_value, end_value, min_value, max_value, phase, cycles, duty_cycle, pulse_start, pulse_end, invert, decimals):
-        values = generate_waveform(
-            steps=steps,
-            waveform=waveform,
-            start_value=start_value,
-            end_value=end_value,
-            min_value=min_value,
-            max_value=max_value,
-            phase=phase,
-            cycles=cycles,
-            duty_cycle=duty_cycle,
-            pulse_start=pulse_start,
-            pulse_end=pulse_end,
-            invert=invert,
-            decimals=decimals,
+    def generate(self, steps, waveform, x_cycles, y_offset, amplitude, min_value, max_value, start_step, end_step, decimals):
+        values = generate_oscillation_schedule(
+            steps, waveform, x_cycles, y_offset, amplitude, min_value, max_value,
+            start_step, end_step, decimals,
         )
         return (format_schedule(values, decimals),)
 
 
-class DynamicLoraSchedulePreview:
+class XCN_MonotonicSchedule:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
+                "curve": (list(MONOTONIC_CURVES), {"default": "cosine"}),
+                "left_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "right_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
+                "end_step": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1, "tooltip": "0 means the last step."}),
+                "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("schedule",)
+    FUNCTION = "generate"
+    CATEGORY = "XCN/Schedule"
+    DESCRIPTION = "Generate a linear, cosine, exponential, or logarithmic monotonic schedule with left/right limits and an active step window."
+
+    def generate(self, steps, curve, left_value, right_value, start_step, end_step, decimals):
+        values = generate_monotonic_schedule(
+            steps, curve, left_value, right_value, start_step, end_step, decimals,
+        )
+        return (format_schedule(values, decimals),)
+
+
+class XCN_SchedulePreview:
     @classmethod
     def INPUT_TYPES(cls):
         return {
@@ -437,30 +467,38 @@ class DynamicLoraSchedulePreview:
             }
         }
 
-    RETURN_TYPES = ("STRING",)
-    RETURN_NAMES = ("preview",)
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("chart",)
     FUNCTION = "preview"
-    CATEGORY = "Dynamic LoRA/Schedule"
+    CATEGORY = "XCN/Schedule"
     OUTPUT_NODE = True
-    DESCRIPTION = "Show every discrete schedule step; invalid strings produce a Chinese failure message."
+    DESCRIPTION = "Render one chart with the smooth curve and every discrete step overlaid on the same axes."
 
     def preview(self, schedule, decimals):
         try:
             values = parse_numeric_schedule(schedule, 0.0, 1.0)
-            text = format_step_preview(values, decimals)
+            image = render_schedule_preview(values, decimals)
+            import numpy as np
+            import torch
+            array = np.asarray(image).astype(np.float32) / 255.0
+            tensor = torch.from_numpy(array)[None, ...]
+            return (tensor,)
         except ValueError as exc:
-            text = f"解析失败：{exc}"
-        return {"ui": {"text": [text]}, "result": (text,)}
+            import torch
+            blank = torch.ones((1, 96, 640, 3), dtype=torch.float32)
+            return {"ui": {"text": [f"解析失败：{exc}"]}, "result": (blank,)}
 
 
 NODE_CLASS_MAPPINGS = {
-    "DynamicLoraRankLoaderModelOnly": DynamicLoraRankLoaderModelOnly,
-    "DynamicLoraWaveformGenerator": DynamicLoraWaveformGenerator,
-    "DynamicLoraSchedulePreview": DynamicLoraSchedulePreview,
+    "XCN_DynamicLoraLoader": XCN_DynamicLoraLoader,
+    "XCN_OscillationSchedule": XCN_OscillationSchedule,
+    "XCN_MonotonicSchedule": XCN_MonotonicSchedule,
+    "XCN_SchedulePreview": XCN_SchedulePreview,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "DynamicLoraRankLoaderModelOnly": "Load LoRA (Dynamic Rank + Strength)",
-    "DynamicLoraWaveformGenerator": "LoRA Schedule Waveform",
-    "DynamicLoraSchedulePreview": "LoRA Schedule Preview",
+    "XCN_DynamicLoraLoader": "XCN_ Dynamic LoRA",
+    "XCN_OscillationSchedule": "XCN_ Oscillation Schedule",
+    "XCN_MonotonicSchedule": "XCN_ Monotonic Schedule",
+    "XCN_SchedulePreview": "XCN_ Schedule Preview",
 }

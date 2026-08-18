@@ -1,22 +1,28 @@
 # Design Notes
 
-## Runtime model
+## Public nodes
 
-The loader keeps ComfyUI's native key mapping and file conversion, but sends only standard `LoRAAdapter` weights through `BypassInjectionManager`. Each scheduled adapter stores its own rank and absolute strength schedules. A lightweight `PREDICT_NOISE` wrapper publishes only the current sampler step index through thread-local state; this allows serial dynamic LoRA nodes to remain independent.
+The public API intentionally has four prefixed nodes:
 
-## Multi-stage sampling
+- `XCN_DynamicLoraLoader`
+- `XCN_OscillationSchedule`
+- `XCN_MonotonicSchedule`
+- `XCN_SchedulePreview`
 
-A model may be sampled more than once in one graph. The plugin therefore stores all scheduled adapters in one model-patcher registry, aggregates adapters by target module, and keeps one stable bypass injection group. Before replacing that group it ejects the active group, preventing `original_forward` from pointing at a previous bypass wrapper.
+The two schedule generators have focused parameters instead of one generic parameter-heavy waveform node.
 
-## Public API
+## Oscillation generator
 
-The node is model-only and exposes exactly four required inputs: `model`, `lora_name`, `rank_schedule`, and `strength_schedule`. Strength values are absolute values in `0..1`; the old static `strength_model` and `strength_clip` inputs are intentionally removed.
+`x_cycles`, `y_offset`, and `amplitude` define the oscillation. `min_value`/`max_value` clip the result and `start_step`/`end_step` define an inclusive 1-based active window. Outside the window the output is zero.
 
-## Broadcast axes
+## Monotonic generator
 
-- Linear outputs use `[..., rank]`, so the mask is shaped with rank on the last axis.
-- Conv outputs use `[batch, rank, spatial...]`, so the mask is shaped with rank on axis 1.
+Linear, cosine, exponential, and logarithmic curves interpolate between `left_value` and `right_value`. Values before/after the active window hold the corresponding limit.
 
-## Native fallback
+## Preview renderer
 
-DoRA/reshape metadata, non-standard adapter families, and tuple/sliced mappings are kept on ComfyUI's native static patch path and produce warnings. This avoids silently changing their math while preserving load compatibility.
+The previewer draws one shared X/Y chart. A Catmull-Rom trend line is overlaid with the exact discrete step polyline, point markers, stems, and a step/value table. Parsing or range errors return UI text instead of a normal chart.
+
+## Multi-stage model lifecycle
+
+Dynamic LoRA adapters are aggregated per target module into one stable bypass injection group. A stable step wrapper publishes the current sampler step. This prevents repeated KSampler stages from stacking bypass hooks on shared Anima Linear modules.

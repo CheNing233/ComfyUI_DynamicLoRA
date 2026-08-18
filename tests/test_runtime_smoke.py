@@ -34,25 +34,26 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
         m = self.module
         self.assertEqual(
             set(m.NODE_CLASS_MAPPINGS),
-            {"DynamicLoraRankLoaderModelOnly", "DynamicLoraWaveformGenerator", "DynamicLoraSchedulePreview"},
+            {"XCN_DynamicLoraLoader", "XCN_OscillationSchedule", "XCN_MonotonicSchedule", "XCN_SchedulePreview"},
         )
-        inputs = m.DynamicLoraRankLoaderModelOnly.INPUT_TYPES()["required"]
+        inputs = m.XCN_DynamicLoraLoader.INPUT_TYPES()["required"]
         self.assertEqual(set(inputs), {"model", "lora_name", "rank_schedule", "strength_schedule"})
         self.assertNotIn("strength_model", inputs)
         self.assertNotIn("strength_clip", inputs)
 
 
     def test_preview_returns_failure_text_for_invalid_schedule(self):
-        result = self.module.DynamicLoraSchedulePreview().preview("1,not-a-number,0", 4)
-        text = result["result"][0]
+        result = self.module.XCN_SchedulePreview().preview("1,not-a-number,0", 4)
+        text = result["ui"]["text"][0]
         self.assertIn("解析失败", text)
         self.assertIn("step 2", text)
 
 
-    def test_waveform_node_outputs_loader_compatible_string(self):
-        node = self.module.DynamicLoraWaveformGenerator()
-        output = node.generate(4, "square", 0.0, 1.0, 0.0, 1.0, 0.0, 2.0, 0.5, 0.25, 0.75, False, 6)
-        self.assertEqual(output, ("1,0,1,0",))
+    def test_waveform_nodes_output_loader_compatible_strings(self):
+        oscillation = self.module.XCN_OscillationSchedule().generate(4, "square", 2.0, 0.5, 0.5, 0.0, 1.0, 1, 0, 6)
+        monotonic = self.module.XCN_MonotonicSchedule().generate(4, "linear", 1.0, 0.0, 1, 0, 6)
+        self.assertEqual(oscillation, ("1,0,1,0",))
+        self.assertEqual(monotonic, ("1,0.666667,0.333333,0",))
 
     def test_clone_after_inject_then_rebuild_is_safe(self):
         m = self.module
