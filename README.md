@@ -33,25 +33,27 @@ strength_schedule = 1,0.8,1,0
 ```text
 steps
 waveform: square / cosine
-x_cycles
+x_step_offset
 y_offset
 amplitude
+cycles
 min_value
 max_value
 start_step
 end_step
 ```
 
-`x_cycles` 是生效区间内的周期数；`y_offset` 是中心线；`amplitude` 是振幅；`min_value` / `max_value` 是最终裁剪范围。`start_step` 和 `end_step` 使用从 1 开始的 step 编号，`end_step=0` 表示最后一步。生效区间外输出 0。
+`x_step_offset` 是 X 轴的 step 偏移；`y_offset` 是中心线；`amplitude` 是振幅；`cycles` 是生效区间内的周期数；`min_value` / `max_value` 是最终裁剪范围。`start_step` 和 `end_step` 使用从 1 开始的 step 编号，`end_step=0` 表示最后一步。生效区间外输出 0。
 
 例如：
 
 ```text
 steps = 8
 waveform = square
-x_cycles = 4
+x_step_offset = 0
 y_offset = 0.5
 amplitude = 0.5
+cycles = 4
 ```
 
 输出：

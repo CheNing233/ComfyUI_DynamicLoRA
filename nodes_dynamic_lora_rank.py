@@ -405,9 +405,10 @@ class XCN_OscillationSchedule:
             "required": {
                 "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
                 "waveform": (list(OSCILLATION_WAVEFORMS), {"default": "cosine"}),
-                "x_cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.1}),
+                "x_step_offset": ("FLOAT", {"default": 0.0, "min": -8192.0, "max": 8192.0, "step": 0.1}),
                 "y_offset": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "amplitude": ("FLOAT", {"default": 0.5, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.1}),
                 "min_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "max_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
                 "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
@@ -422,9 +423,9 @@ class XCN_OscillationSchedule:
     CATEGORY = "XCN/Schedule"
     DESCRIPTION = "Generate a square or cosine oscillation schedule using x cycles, y offset, amplitude, clipping, and an active step window."
 
-    def generate(self, steps, waveform, x_cycles, y_offset, amplitude, min_value, max_value, start_step, end_step, decimals):
+    def generate(self, steps, waveform, x_step_offset, y_offset, amplitude, cycles, min_value, max_value, start_step, end_step, decimals):
         values = generate_oscillation_schedule(
-            steps, waveform, x_cycles, y_offset, amplitude, min_value, max_value,
+            steps, waveform, x_step_offset, y_offset, amplitude, cycles, min_value, max_value,
             start_step, end_step, decimals,
         )
         return (format_schedule(values, decimals),)
@@ -463,7 +464,7 @@ class XCN_SchedulePreview:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "schedule": ("STRING", {"default": "1,0.5,1,0", "multiline": True}),
+                "schedule": ("STRING", {"default": "1,0.5,1,0", "multiline": False}),
                 "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
             }
         }
@@ -505,8 +506,8 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "XCN_DynamicLoraLoader": "XCN_ Dynamic LoRA",
-    "XCN_OscillationSchedule": "XCN_ Oscillation Schedule",
-    "XCN_MonotonicSchedule": "XCN_ Monotonic Schedule",
-    "XCN_SchedulePreview": "XCN_ Schedule Preview",
+    "XCN_DynamicLoraLoader": "XCN Dynamic LoRA",
+    "XCN_OscillationSchedule": "XCN Oscillation Schedule",
+    "XCN_MonotonicSchedule": "XCN Monotonic Schedule",
+    "XCN_SchedulePreview": "XCN Schedule Preview",
 }

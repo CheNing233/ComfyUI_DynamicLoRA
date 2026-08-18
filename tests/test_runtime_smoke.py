@@ -50,7 +50,7 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
 
 
     def test_waveform_nodes_output_loader_compatible_strings(self):
-        oscillation = self.module.XCN_OscillationSchedule().generate(4, "square", 2.0, 0.5, 0.5, 0.0, 1.0, 1, 0, 6)
+        oscillation = self.module.XCN_OscillationSchedule().generate(4, "square", 0.0, 0.5, 0.5, 2.0, 0.0, 1.0, 1, 0, 6)
         monotonic = self.module.XCN_MonotonicSchedule().generate(4, "linear", 1.0, 0.0, 1, 0, 6)
         self.assertEqual(oscillation, ("1,0,1,0",))
         self.assertEqual(monotonic, ("1,0.666667,0.333333,0",))

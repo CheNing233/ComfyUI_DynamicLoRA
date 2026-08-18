@@ -54,9 +54,10 @@ def format_schedule(values: Sequence[float], decimals: int = 6) -> str:
 def generate_oscillation_schedule(
     steps: int,
     waveform: str,
-    x_cycles: float = 1.0,
+    x_step_offset: float = 0.0,
     y_offset: float = 0.5,
     amplitude: float = 0.5,
+    cycles: float = 1.0,
     min_value: float = 0.0,
     max_value: float = 1.0,
     start_step: int = 1,
@@ -73,13 +74,14 @@ def generate_oscillation_schedule(
     if waveform not in OSCILLATION_WAVEFORMS:
         raise ValueError(f"unknown oscillation waveform: {waveform!r}")
     min_value, max_value = _validate_range(min_value, max_value)
-    x_cycles = float(x_cycles)
+    x_step_offset = float(x_step_offset)
     y_offset = float(y_offset)
     amplitude = float(amplitude)
-    if not all(math.isfinite(value) for value in (x_cycles, y_offset, amplitude)):
-        raise ValueError("x_cycles, y_offset and amplitude must be finite numbers")
-    if x_cycles < 0.0:
-        raise ValueError("x_cycles cannot be negative")
+    cycles = float(cycles)
+    if not all(math.isfinite(value) for value in (x_step_offset, y_offset, amplitude, cycles)):
+        raise ValueError("x_step_offset, y_offset, amplitude and cycles must be finite numbers")
+    if cycles < 0.0:
+        raise ValueError("cycles cannot be negative")
     left, right = _step_window(steps, start_step, end_step)
     window_length = max(1, right - left + 1)
     values = []
@@ -89,8 +91,8 @@ def generate_oscillation_schedule(
             continue
         # Oscillation windows use half-open step sampling so square waves
         # remain truly alternating at the final active step.
-        position = (index - left) / float(window_length)
-        phase = 2.0 * math.pi * x_cycles * position
+        position = ((index - left) + x_step_offset) / float(window_length)
+        phase = 2.0 * math.pi * cycles * position
         carrier = 1.0 if (phase % (2.0 * math.pi)) < math.pi else -1.0
         if waveform == "cosine":
             carrier = math.cos(phase)

@@ -13,7 +13,7 @@ The two schedule generators intentionally have focused parameters instead of one
 
 ## Oscillation generator
 
-`x_cycles`, `y_offset`, and `amplitude` define square/cosine oscillation. `min_value`/`max_value` clip the result and `start_step`/`end_step` define an inclusive 1-based active window. Outside the window the output is zero.
+`x_step_offset` and `y_offset` define the horizontal/vertical offset; `cycles` controls the frequency and `amplitude` controls the oscillation size. `min_value`/`max_value` clip the result and `start_step`/`end_step` define an inclusive 1-based active window. Outside the window the output is zero.
 
 ## Monotonic generator
 

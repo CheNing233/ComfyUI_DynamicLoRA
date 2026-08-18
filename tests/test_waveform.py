@@ -11,11 +11,11 @@ spec.loader.exec_module(waveform)
 
 class WaveformTests(unittest.TestCase):
     def test_oscillation_square_is_discrete(self):
-        values = waveform.generate_oscillation_schedule(8, "square", x_cycles=4, y_offset=0.5, amplitude=0.5)
+        values = waveform.generate_oscillation_schedule(8, "square", x_step_offset=0, y_offset=0.5, amplitude=0.5, cycles=4)
         self.assertEqual(values, (1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0))
 
     def test_oscillation_active_window_is_zero_outside(self):
-        values = waveform.generate_oscillation_schedule(6, "cosine", x_cycles=1, start_step=2, end_step=5)
+        values = waveform.generate_oscillation_schedule(6, "cosine", x_step_offset=0, cycles=1, start_step=2, end_step=5)
         self.assertEqual(values[0], 0.0)
         self.assertEqual(values[-1], 0.0)
         self.assertEqual(len(values), 6)
