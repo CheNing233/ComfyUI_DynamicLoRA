@@ -34,7 +34,7 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
         m = self.module
         self.assertEqual(
             set(m.NODE_CLASS_MAPPINGS),
-            {"XCN_DynamicLoraLoader", "XCN_OscillationSchedule", "XCN_MonotonicSchedule", "XCN_SchedulePreview"},
+            {"XCN_DynamicLoraLoader", "XCN_OscillationSchedule", "XCN_MonotonicSchedule", "XCN_FlowShiftSchedule", "XCN_SchedulePreview"},
         )
         inputs = m.XCN_DynamicLoraLoader.INPUT_TYPES()["required"]
         self.assertEqual(set(inputs), {"model", "lora_name", "rank_schedule", "strength_schedule"})
@@ -48,6 +48,12 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
         self.assertIn("解析失败", text)
         self.assertIn("step 2", text)
 
+
+
+    def test_flow_shift_node_uses_anima_default(self):
+        output = self.module.XCN_FlowShiftSchedule().remap("0,0.5,1", 3.0, 6)
+        self.assertEqual(len(output[0].split(",")), 3)
+        self.assertTrue(float(output[0].split(",")[1]) < 0.5)
 
     def test_waveform_nodes_output_loader_compatible_strings(self):
         oscillation = self.module.XCN_OscillationSchedule().generate(4, "square", 0.0, 0.5, 0.5, 2.0, 0.0, 1.0, 1, 0, 6)

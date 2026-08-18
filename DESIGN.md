@@ -19,6 +19,10 @@ The two schedule generators intentionally have focused parameters instead of one
 
 Linear, cosine, exponential, and logarithmic curves interpolate between `left_value` and `right_value`. Values before/after the active window hold the corresponding limit.
 
+## Flow-shift remapper
+
+`XCN_FlowShiftSchedule` applies the local Anima `ModelSamplingDiscreteFlow` mapping. With `shift=3.0`, each output step samples an earlier normalized progress, keeping high-noise schedule values active longer. `shift=1.0` is identity.
+
 ## Preview renderer
 
 The previewer draws exactly one shared X/Y chart. A smooth Catmull-Rom trend line is overlaid with the exact discrete step polyline, point markers, stems, and a step/value table. Parsing or range errors return UI text instead of a normal chart.

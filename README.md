@@ -86,6 +86,47 @@ end_step
 
 生效区间之前保持 `left_value`，之后保持 `right_value`。
 
+### XCN_FlowShiftSchedule
+
+把已有 schedule 按 Anima/Flow 的 `shift` 关系重新取样，让取值向高噪声 steps 侧延伸。
+
+输入：
+
+```text
+schedule
+flow_shift
+```
+
+Anima 默认使用：
+
+```text
+flow_shift = 3.0
+```
+
+例如原始 schedule：
+
+```text
+0,0.5,1
+```
+
+使用 `flow_shift=3` 后，中间取值会被拉回高噪声侧，仍然保持相同的 step 数量。`flow_shift=1` 表示不改变 schedule。
+
+内部关系为：
+
+```text
+noise = 1 - progress
+shifted_noise = shift * noise / (1 + (shift - 1) * noise)
+source_progress = 1 - shifted_noise
+```
+
+它可以放在任意 schedule 发生器和 LoRA Loader 之间：
+
+```text
+XCN_OscillationSchedule / XCN_MonotonicSchedule
+  → XCN_FlowShiftSchedule
+      → XCN_DynamicLoraLoader
+```
+
 ### XCN_SchedulePreview
 
 输入 schedule 字符串，输出一张图。图中只有一组 X/Y 坐标：

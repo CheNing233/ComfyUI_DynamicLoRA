@@ -147,6 +147,40 @@ def generate_monotonic_schedule(
     return tuple(values)
 
 
+
+def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, decimals: int = 6) -> tuple[float, ...]:
+    """Remap values with the Anima/Flow discrete-flow shift toward high noise.
+
+    ``progress=0`` is the first/high-noise step and ``progress=1`` is the
+    final/low-noise step. A shift greater than one samples an earlier source
+    progress, so high-noise values persist for longer.
+    """
+    values = tuple(float(value) for value in values)
+    if not values:
+        raise ValueError("schedule string is empty")
+    flow_shift = float(flow_shift)
+    if not math.isfinite(flow_shift) or flow_shift <= 0.0:
+        raise ValueError("flow_shift must be a positive finite number")
+    if not all(0.0 <= value <= 1.0 and math.isfinite(value) for value in values):
+        raise ValueError("schedule values must be finite numbers between 0 and 1")
+    if len(values) == 1 or flow_shift == 1.0:
+        return tuple(round(value, decimals) for value in values)
+
+    output = []
+    last_index = len(values) - 1
+    for index in range(len(values)):
+        progress = index / float(last_index)
+        noise = 1.0 - progress
+        shifted_noise = flow_shift * noise / (1.0 + (flow_shift - 1.0) * noise)
+        source_progress = _clamp(1.0 - shifted_noise)
+        source_position = source_progress * last_index
+        left = int(math.floor(source_position))
+        right = min(last_index, left + 1)
+        fraction = source_position - left
+        value = values[left] + (values[right] - values[left]) * fraction
+        output.append(round(_clamp(value), decimals))
+    return tuple(output)
+
 def parse_numeric_schedule(
     value: str,
     min_value: float | None = None,

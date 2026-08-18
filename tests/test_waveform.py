@@ -35,6 +35,16 @@ class WaveformTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "start_step"):
             waveform.generate_oscillation_schedule(4, "square", start_step=4, end_step=2)
 
+
+    def test_flow_shift_identity_and_high_noise_pull(self):
+        values = (0.0, 0.25, 0.5, 0.75, 1.0)
+        self.assertEqual(waveform.flow_shift_schedule(values, 1.0), values)
+        shifted = waveform.flow_shift_schedule(values, 3.0)
+        self.assertEqual(shifted[0], 0.0)
+        self.assertEqual(shifted[-1], 1.0)
+        self.assertLess(shifted[2], values[2])
+        self.assertLess(shifted[3], values[3])
+
     def test_format_and_parse(self):
         text = waveform.format_schedule((1.0, 0.5, 0.0), 4)
         self.assertEqual(text, "1,0.5,0")

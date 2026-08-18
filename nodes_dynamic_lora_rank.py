@@ -29,6 +29,7 @@ try:
         format_schedule,
         generate_monotonic_schedule,
         generate_oscillation_schedule,
+        flow_shift_schedule,
         parse_numeric_schedule,
         render_schedule_preview,
     )
@@ -39,6 +40,7 @@ except ImportError:
         format_schedule,
         generate_monotonic_schedule,
         generate_oscillation_schedule,
+        flow_shift_schedule,
         parse_numeric_schedule,
         render_schedule_preview,
     )
@@ -459,6 +461,28 @@ class XCN_MonotonicSchedule:
         return (format_schedule(values, decimals),)
 
 
+class XCN_FlowShiftSchedule:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "schedule": ("STRING", {"default": "1,0.5,1,0", "multiline": False}),
+                "flow_shift": ("FLOAT", {"default": 3.0, "min": 0.01, "max": 100.0, "step": 0.01, "tooltip": "Anima uses shift=3.0 by default."}),
+                "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("schedule",)
+    FUNCTION = "remap"
+    CATEGORY = "XCN/Schedule"
+    DESCRIPTION = "Remap a discrete schedule with Anima flow shift, pulling values toward high-noise steps."
+
+    def remap(self, schedule, flow_shift, decimals):
+        values = parse_numeric_schedule(schedule, 0.0, 1.0)
+        return (format_schedule(flow_shift_schedule(values, flow_shift, decimals), decimals),)
+
+
 class XCN_SchedulePreview:
     @classmethod
     def INPUT_TYPES(cls):
@@ -502,6 +526,7 @@ NODE_CLASS_MAPPINGS = {
     "XCN_DynamicLoraLoader": XCN_DynamicLoraLoader,
     "XCN_OscillationSchedule": XCN_OscillationSchedule,
     "XCN_MonotonicSchedule": XCN_MonotonicSchedule,
+    "XCN_FlowShiftSchedule": XCN_FlowShiftSchedule,
     "XCN_SchedulePreview": XCN_SchedulePreview,
 }
 
@@ -509,5 +534,6 @@ NODE_DISPLAY_NAME_MAPPINGS = {
     "XCN_DynamicLoraLoader": "XCN Dynamic LoRA",
     "XCN_OscillationSchedule": "XCN Oscillation Schedule",
     "XCN_MonotonicSchedule": "XCN Monotonic Schedule",
+    "XCN_FlowShiftSchedule": "XCN Flow Shift Schedule",
     "XCN_SchedulePreview": "XCN Schedule Preview",
 }
