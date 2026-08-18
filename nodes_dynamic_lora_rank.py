@@ -21,6 +21,10 @@ try:
     from .schedule import parse_ratio_schedule, ratio_for_step, step_index_for_sigma, active_rank
 except ImportError:
     from schedule import parse_ratio_schedule, ratio_for_step, step_index_for_sigma, active_rank
+try:
+    from .waveform import WAVEFORM_NAMES, format_schedule, format_step_preview, generate_waveform, parse_numeric_schedule
+except ImportError:
+    from waveform import WAVEFORM_NAMES, format_schedule, format_step_preview, generate_waveform, parse_numeric_schedule
 
 
 LOGGER = logging.getLogger("ComfyUI-DynamicLoraRank")
@@ -203,7 +207,9 @@ class CompositeScheduledAdapter(comfy.weight_adapter.WeightAdapterBase):
         return y
 
 
-def _new_scheduled_adapter(source: LoRAAdapter, rank_schedule, strength_schedule, base_strength: float = 1.0):
+def _registry_adapter(source: LoRAAdapter, rank_schedule, strength_schedule, base_strength: float = 1.0):
+    if isinstance(source, ScheduledLoRAAdapter):
+        return source
     return ScheduledLoRAAdapter(source, rank_schedule, strength_schedule, base_strength)
 
 
@@ -248,7 +254,7 @@ def _classify_loaded_patches(loaded: dict, rank_schedule, strength_schedule):
             )
             regular_patches[key] = patch_data
             continue
-        scheduled_patches[key] = _new_scheduled_adapter(
+        scheduled_patches[key] = _registry_adapter(
             patch_data,
             rank_schedule,
             strength_schedule,
@@ -317,7 +323,7 @@ def _load_bypass_with_schedule(model, lora, rank_schedule, strength_schedule):
     for key, adapter in scheduled_patches.items():
         if _patch_key_exists(model_keys, key):
             registry.setdefault(key, []).append(
-                _new_scheduled_adapter(
+                _registry_adapter(
                     adapter,
                     adapter.rank_schedule,
                     adapter.strength_schedule,
@@ -375,10 +381,86 @@ class DynamicLoraRankLoaderModelOnly:
         return (model_out,)
 
 
+class DynamicLoraWaveformGenerator:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
+                "waveform": (list(WAVEFORM_NAMES), {"default": "linear_down"}),
+                "start_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "end_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "min_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "max_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "phase": ("FLOAT", {"default": 0.0, "min": -100.0, "max": 100.0, "step": 0.01}),
+                "cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.01}),
+                "duty_cycle": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "pulse_start": ("FLOAT", {"default": 0.25, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "pulse_end": ("FLOAT", {"default": 0.75, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "invert": ("BOOLEAN", {"default": False}),
+                "decimals": ("INT", {"default": 4, "min": 0, "max": 12, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("schedule",)
+    FUNCTION = "generate"
+    CATEGORY = "Dynamic LoRA/Schedule"
+    DESCRIPTION = "Generate a discrete per-step waveform string for rank_schedule or strength_schedule."
+
+    def generate(self, steps, waveform, start_value, end_value, min_value, max_value, phase, cycles, duty_cycle, pulse_start, pulse_end, invert, decimals):
+        values = generate_waveform(
+            steps=steps,
+            waveform=waveform,
+            start_value=start_value,
+            end_value=end_value,
+            min_value=min_value,
+            max_value=max_value,
+            phase=phase,
+            cycles=cycles,
+            duty_cycle=duty_cycle,
+            pulse_start=pulse_start,
+            pulse_end=pulse_end,
+            invert=invert,
+            decimals=decimals,
+        )
+        return (format_schedule(values, decimals),)
+
+
+class DynamicLoraSchedulePreview:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "schedule": ("STRING", {"default": "1,0.5,1,0", "multiline": True}),
+                "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
+            }
+        }
+
+    RETURN_TYPES = ("STRING",)
+    RETURN_NAMES = ("preview",)
+    FUNCTION = "preview"
+    CATEGORY = "Dynamic LoRA/Schedule"
+    OUTPUT_NODE = True
+    DESCRIPTION = "Show every discrete schedule step; invalid strings produce a Chinese failure message."
+
+    def preview(self, schedule, decimals):
+        try:
+            values = parse_numeric_schedule(schedule, 0.0, 1.0)
+            text = format_step_preview(values, decimals)
+        except ValueError as exc:
+            text = f"解析失败：{exc}"
+        return {"ui": {"text": [text]}, "result": (text,)}
+
+
 NODE_CLASS_MAPPINGS = {
     "DynamicLoraRankLoaderModelOnly": DynamicLoraRankLoaderModelOnly,
+    "DynamicLoraWaveformGenerator": DynamicLoraWaveformGenerator,
+    "DynamicLoraSchedulePreview": DynamicLoraSchedulePreview,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "DynamicLoraRankLoaderModelOnly": "Load LoRA (Dynamic Rank + Strength)",
+    "DynamicLoraWaveformGenerator": "LoRA Schedule Waveform",
+    "DynamicLoraSchedulePreview": "LoRA Schedule Preview",
 }

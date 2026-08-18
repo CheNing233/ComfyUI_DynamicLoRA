@@ -32,11 +32,61 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
 
     def test_public_node_has_only_absolute_strength_schedule(self):
         m = self.module
-        self.assertEqual(set(m.NODE_CLASS_MAPPINGS), {"DynamicLoraRankLoaderModelOnly"})
+        self.assertEqual(
+            set(m.NODE_CLASS_MAPPINGS),
+            {"DynamicLoraRankLoaderModelOnly", "DynamicLoraWaveformGenerator", "DynamicLoraSchedulePreview"},
+        )
         inputs = m.DynamicLoraRankLoaderModelOnly.INPUT_TYPES()["required"]
         self.assertEqual(set(inputs), {"model", "lora_name", "rank_schedule", "strength_schedule"})
         self.assertNotIn("strength_model", inputs)
         self.assertNotIn("strength_clip", inputs)
+
+
+    def test_preview_returns_failure_text_for_invalid_schedule(self):
+        result = self.module.DynamicLoraSchedulePreview().preview("1,not-a-number,0", 4)
+        text = result["result"][0]
+        self.assertIn("解析失败", text)
+        self.assertIn("step 2", text)
+
+
+    def test_waveform_node_outputs_loader_compatible_string(self):
+        node = self.module.DynamicLoraWaveformGenerator()
+        output = node.generate(4, "square", 0.0, 1.0, 0.0, 1.0, 0.0, 2.0, 0.5, 0.25, 0.75, False, 6)
+        self.assertEqual(output, ("1,0,1,0",))
+
+    def test_clone_after_inject_then_rebuild_is_safe(self):
+        m = self.module
+        import torch.nn as nn
+
+        class Root(nn.Module):
+            def __init__(self):
+                super().__init__()
+                self.linear = nn.Linear(3, 2, bias=False)
+                nn.init.zeros_(self.linear.weight)
+
+        base = self.ModelPatcher(Root(), torch.device("cpu"), torch.device("cpu"), size=1)
+        up = torch.ones(2, 4)
+        down = torch.ones(4, 3)
+        adapter = m.ScheduledLoRAAdapter(
+            self.LoRAAdapter(set(), (up, down, 4.0, None, None, None)),
+            (1.0,),
+            (1.0,),
+        )
+        registry = {"linear.weight": [adapter]}
+        first = base.clone()
+        m._rebuild_dynamic_injections(first, registry, is_clip=False)
+        first.inject_model()
+        second = first.clone()
+        try:
+            m._rebuild_dynamic_injections(second, registry, is_clip=False)
+            second.inject_model()
+            output = second.model.linear(torch.ones(1, 3))
+            self.assertTrue(torch.isfinite(output).all())
+        finally:
+            if second.is_injected:
+                second.eject_model()
+            if first.is_injected:
+                first.eject_model()
 
     def test_transformer_linear_rank_mask_uses_last_axis(self):
         m = self.module
