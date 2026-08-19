@@ -10,13 +10,15 @@ spec.loader.exec_module(schedule)
 
 
 class DynamicLoraRankScheduleTests(unittest.TestCase):
-    def test_parse_rank_and_strength_ratios(self):
+    def test_parse_rank_and_strength_schedules(self):
         self.assertEqual(schedule.parse_ratio_schedule("1, 0.5, 1, 0", "rank_schedule"), (1.0, 0.5, 1.0, 0.0))
-        self.assertEqual(schedule.parse_ratio_schedule("1, 0.25", "strength_schedule"), (1.0, 0.25))
+        self.assertEqual(schedule.parse_strength_schedule("-2, 0.25, 3"), (-2.0, 0.25, 3.0))
 
     def test_parse_rejects_out_of_range_and_empty_values(self):
-        with self.assertRaisesRegex(ValueError, "strength_schedule"):
-            schedule.parse_ratio_schedule("1,1.1", "strength_schedule")
+        with self.assertRaisesRegex(ValueError, "rank_schedule"):
+            schedule.parse_ratio_schedule("1,1.1", "rank_schedule")
+        with self.assertRaisesRegex(ValueError, "finite"):
+            schedule.parse_strength_schedule("1,nan")
         with self.assertRaisesRegex(ValueError, "rank_schedule"):
             schedule.parse_ratio_schedule("1,,0", "rank_schedule")
 

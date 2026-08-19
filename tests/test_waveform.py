@@ -48,13 +48,13 @@ class WaveformTests(unittest.TestCase):
         self.assertLess(high_noise_pull[2], values[2])
         self.assertGreater(low_noise_pull[2], values[2])
 
-    def test_format_and_parse(self):
-        text = waveform.format_schedule((1.0, 0.5, 0.0), 4)
-        self.assertEqual(text, "1,0.5,0")
-        self.assertEqual(waveform.parse_numeric_schedule(text, 0.0, 1.0), (1.0, 0.5, 0.0))
+    def test_format_and_parse_preserves_strength_values(self):
+        text = waveform.format_schedule((-2.0, 0.5, 3.0), 4)
+        self.assertEqual(text, "-2,0.5,3")
+        self.assertEqual(waveform.parse_numeric_schedule(text), (-2.0, 0.5, 3.0))
 
     def test_preview_render_contains_image(self):
-        image = waveform.render_schedule_preview((1.0, 0.5, 0.0), 4)
+        image = waveform.render_schedule_preview((-2.0, 0.5, 3.0), 4)
         self.assertGreater(image.width, 300)
         self.assertGreater(image.height, 300)
 

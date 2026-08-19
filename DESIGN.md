@@ -9,7 +9,7 @@ The public API has four prefixed nodes:
 - `XCN_MonotonicSchedule`
 - `XCN_SchedulePreview`
 
-The two schedule generators intentionally have focused parameters instead of one generic parameter-heavy waveform node.
+The two schedule generators intentionally have focused parameters instead of one generic parameter-heavy waveform node. Rank schedules remain ratios in `[0,1]`; strength schedules are arbitrary finite floats, including negative and above-one values.
 
 ## Oscillation generator
 

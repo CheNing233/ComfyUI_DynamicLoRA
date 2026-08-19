@@ -42,6 +42,11 @@ class ComfyRuntimeSmokeTests(unittest.TestCase):
         self.assertNotIn("strength_clip", inputs)
 
 
+    def test_strength_schedule_accepts_negative_and_above_one(self):
+        m = self.module
+        values = m.parse_strength_schedule("-2,0.5,3")
+        self.assertEqual(values, (-2.0, 0.5, 3.0))
+
     def test_preview_returns_failure_text_for_invalid_schedule(self):
         result = self.module.XCN_SchedulePreview().preview("1,not-a-number,0", 4)
         text = result["ui"]["text"][0]

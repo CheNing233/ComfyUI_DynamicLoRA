@@ -19,9 +19,9 @@ import comfy.weight_adapter
 from comfy.weight_adapter.lora import LoRAAdapter
 
 try:
-    from .schedule import parse_ratio_schedule, ratio_for_step, step_index_for_sigma, active_rank
+    from .schedule import parse_ratio_schedule, parse_strength_schedule, ratio_for_step, step_index_for_sigma, active_rank
 except ImportError:
-    from schedule import parse_ratio_schedule, ratio_for_step, step_index_for_sigma, active_rank
+    from schedule import parse_ratio_schedule, parse_strength_schedule, ratio_for_step, step_index_for_sigma, active_rank
 try:
     from .waveform import (
         MONOTONIC_CURVES,
@@ -381,7 +381,7 @@ class XCN_DynamicLoraLoader:
 
     def load_model_only(self, model, lora_name, rank_schedule, strength_schedule="1.0"):
         rank_values = parse_ratio_schedule(rank_schedule, "rank_schedule")
-        strength_values = parse_ratio_schedule(strength_schedule, "strength_schedule")
+        strength_values = parse_strength_schedule(strength_schedule)
         lora_path = folder_paths.get_full_path_or_raise("loras", lora_name)
         if self.loaded_lora is None or self.loaded_lora[0] != lora_path:
             lora, metadata = comfy.utils.load_torch_file(lora_path, safe_load=True, return_metadata=True)
@@ -408,11 +408,11 @@ class XCN_OscillationSchedule:
                 "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
                 "waveform": (list(OSCILLATION_WAVEFORMS), {"default": "cosine"}),
                 "x_step_offset": ("FLOAT", {"default": 0.0, "min": -8192.0, "max": 8192.0, "step": 0.1}),
-                "y_offset": ("FLOAT", {"default": 0.5, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "amplitude": ("FLOAT", {"default": 0.5, "min": -1.0, "max": 1.0, "step": 0.01}),
+                "y_offset": ("FLOAT", {"default": 0.5, "min": -100.0, "max": 100.0, "step": 0.01}),
+                "amplitude": ("FLOAT", {"default": 0.5, "min": -100.0, "max": 100.0, "step": 0.01}),
                 "cycles": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 256.0, "step": 0.1}),
-                "min_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "max_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "min_value": ("FLOAT", {"default": 0.0, "min": -100.0, "max": 100.0, "step": 0.01}),
+                "max_value": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
                 "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
                 "end_step": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1, "tooltip": "0 means the last step."}),
                 "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
@@ -440,8 +440,8 @@ class XCN_MonotonicSchedule:
             "required": {
                 "steps": ("INT", {"default": 30, "min": 1, "max": 8192, "step": 1}),
                 "curve": (list(MONOTONIC_CURVES), {"default": "cosine"}),
-                "left_value": ("FLOAT", {"default": 0.0, "min": 0.0, "max": 1.0, "step": 0.01}),
-                "right_value": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.01}),
+                "left_value": ("FLOAT", {"default": 0.0, "min": -100.0, "max": 100.0, "step": 0.01}),
+                "right_value": ("FLOAT", {"default": 1.0, "min": -100.0, "max": 100.0, "step": 0.01}),
                 "start_step": ("INT", {"default": 1, "min": 1, "max": 8192, "step": 1}),
                 "end_step": ("INT", {"default": 0, "min": 0, "max": 8192, "step": 1, "tooltip": "0 means the last step."}),
                 "decimals": ("INT", {"default": 6, "min": 0, "max": 12, "step": 1}),
@@ -480,7 +480,7 @@ class XCN_FlowShiftSchedule:
     DESCRIPTION = "Remap a discrete schedule with Anima flow shift, pulling values toward high-noise steps."
 
     def remap(self, schedule, flow_shift, invert, decimals):
-        values = parse_numeric_schedule(schedule, 0.0, 1.0)
+        values = parse_numeric_schedule(schedule)
         return (format_schedule(flow_shift_schedule(values, flow_shift, invert, decimals), decimals),)
 
 
@@ -503,7 +503,7 @@ class XCN_SchedulePreview:
 
     def preview(self, schedule, decimals):
         try:
-            values = parse_numeric_schedule(schedule, 0.0, 1.0)
+            values = parse_numeric_schedule(schedule)
             image = render_schedule_preview(values, decimals)
             import numpy as np
             import torch

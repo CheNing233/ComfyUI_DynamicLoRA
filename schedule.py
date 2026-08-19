@@ -30,6 +30,30 @@ def parse_ratio_schedule(value: str | Iterable[float], field_name: str = "schedu
     return tuple(result)
 
 
+
+def parse_strength_schedule(value: str | Iterable[float]) -> tuple[float, ...]:
+    """Parse a strength schedule as finite floats without a [0, 1] limit."""
+    if isinstance(value, str):
+        tokens = [token.strip() for token in value.split(",")]
+        if not tokens or any(token == "" for token in tokens):
+            raise ValueError("strength_schedule must contain comma-separated numbers")
+        raw_values = tokens
+    else:
+        raw_values = list(value)
+        if not raw_values:
+            raise ValueError("strength_schedule must contain at least one value")
+
+    result: list[float] = []
+    for raw in raw_values:
+        try:
+            number = float(raw)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"invalid strength_schedule value: {raw!r}") from exc
+        if not math.isfinite(number):
+            raise ValueError(f"strength_schedule values must be finite: {raw!r}")
+        result.append(number)
+    return tuple(result)
+
 def parse_rank_schedule(value: str | Iterable[float]) -> tuple[float, ...]:
     """Backward-compatible alias for callers using the original helper name."""
     return parse_ratio_schedule(value, "rank_schedule")

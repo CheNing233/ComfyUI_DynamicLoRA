@@ -26,8 +26,8 @@ def _validate_range(min_value: float, max_value: float) -> tuple[float, float]:
     max_value = float(max_value)
     if not math.isfinite(min_value) or not math.isfinite(max_value):
         raise ValueError("min_value and max_value must be finite numbers")
-    if not 0.0 <= min_value <= 1.0 or not 0.0 <= max_value <= 1.0:
-        raise ValueError("min_value and max_value must be between 0 and 1")
+    if not math.isfinite(min_value) or not math.isfinite(max_value):
+        raise ValueError("min_value and max_value must be finite numbers")
     if min_value > max_value:
         raise ValueError("min_value cannot be greater than max_value")
     return min_value, max_value
@@ -131,8 +131,8 @@ def generate_monotonic_schedule(
         raise ValueError(f"unknown monotonic curve: {curve!r}")
     left_value = float(left_value)
     right_value = float(right_value)
-    if not 0.0 <= left_value <= 1.0 or not 0.0 <= right_value <= 1.0:
-        raise ValueError("left_value and right_value must be between 0 and 1")
+    if not math.isfinite(left_value) or not math.isfinite(right_value):
+        raise ValueError("left_value and right_value must be finite numbers")
     start, end = _step_window(steps, start_step, end_step)
     span = max(1, end - start)
     values = []
@@ -163,8 +163,8 @@ def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, invert
     flow_shift = float(flow_shift)
     if not math.isfinite(flow_shift) or flow_shift <= 0.0:
         raise ValueError("flow_shift must be a positive finite number")
-    if not all(0.0 <= value <= 1.0 and math.isfinite(value) for value in values):
-        raise ValueError("schedule values must be finite numbers between 0 and 1")
+    if not all(math.isfinite(value) for value in values):
+        raise ValueError("schedule values must be finite numbers")
     if len(values) == 1 or flow_shift == 1.0:
         return tuple(round(value, decimals) for value in values)
 
@@ -184,8 +184,9 @@ def flow_shift_schedule(values: Sequence[float], flow_shift: float = 3.0, invert
         right = min(last_index, left + 1)
         fraction = source_position - left
         value = values[left] + (values[right] - values[left]) * fraction
-        output.append(round(_clamp(value), decimals))
+        output.append(round(value, decimals))
     return tuple(output)
+
 
 def parse_numeric_schedule(
     value: str,
@@ -223,7 +224,7 @@ def _catmull_rom(values: Sequence[float], samples_per_segment: int = 12) -> list
         for sample in range(samples_per_segment):
             t = sample / float(samples_per_segment)
             value = 0.5 * ((2 * p1) + (-p0 + p2) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (-p0 + 3 * p1 - 3 * p2 + p3) * t * t * t)
-            result.append(_clamp(value))
+            result.append(value)
     result.append(float(values[-1]))
     return result
 
@@ -233,9 +234,13 @@ def render_schedule_preview(values: Sequence[float], decimals: int = 6):
     from PIL import Image, ImageDraw, ImageFont
 
     values = tuple(float(value) for value in values)
-    if not values:
-        raise ValueError("schedule string is empty")
+    if not values or not all(math.isfinite(value) for value in values):
+        raise ValueError("schedule values must be finite numbers")
     font = ImageFont.load_default()
+    y_min = min(0.0, min(values))
+    y_max = max(1.0, max(values))
+    if math.isclose(y_min, y_max):
+        y_max = y_min + 1.0
     width = 1200
     graph_height = 520
     margin_left, margin_right, margin_top = 82, 28, 42
@@ -251,8 +256,8 @@ def render_schedule_preview(values: Sequence[float], decimals: int = 6):
     graph_bottom = graph_height
     draw.text((margin_left, 12), "XCN Schedule Preview", fill=(30, 30, 30), font=font)
     for tick in range(5):
-        y_value = tick / 4.0
-        y = graph_bottom - int(y_value * (graph_bottom - graph_top))
+        y_value = y_min + (y_max - y_min) * tick / 4.0
+        y = graph_bottom - int((y_value - y_min) / (y_max - y_min) * (graph_bottom - graph_top))
         draw.line((graph_left, y, graph_right, y), fill=(225, 225, 225), width=1)
         draw.text((20, y - 5), _format_value(y_value, 2), fill=(80, 80, 80), font=font)
     draw.line((graph_left, graph_top, graph_left, graph_bottom), fill=(70, 70, 70), width=2)
@@ -260,14 +265,14 @@ def render_schedule_preview(values: Sequence[float], decimals: int = 6):
 
     def point(step_index: int, value: float):
         x = graph_left if len(values) == 1 else graph_left + (graph_right - graph_left) * step_index / (len(values) - 1)
-        y = graph_bottom - (graph_bottom - graph_top) * _clamp(value)
+        y = graph_bottom - (graph_bottom - graph_top) * ((value - y_min) / (y_max - y_min))
         return int(round(x)), int(round(y))
 
     smooth = _catmull_rom(values)
     smooth_points = []
     for i, value in enumerate(smooth):
         source_position = i / max(1, len(smooth) - 1)
-        smooth_points.append((int(round(graph_left + (graph_right - graph_left) * source_position)), int(round(graph_bottom - (graph_bottom - graph_top) * value))))
+        smooth_points.append((int(round(graph_left + (graph_right - graph_left) * source_position)), int(round(graph_bottom - (graph_bottom - graph_top) * ((value - y_min) / (y_max - y_min))))))
     if len(smooth_points) > 1:
         draw.line(smooth_points, fill=(40, 110, 220), width=3)
 

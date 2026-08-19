@@ -17,7 +17,7 @@ rank_schedule
 strength_schedule
 ```
 
-`rank_schedule` 控制 LoRA 激活的 rank 比例；`strength_schedule` 是绝对的每步 LoRA strength。两者都使用英文逗号分隔，缺少的后续 step 使用最后一个值，多余值丢弃。
+`rank_schedule` 控制 LoRA 激活的 rank 比例，必须位于 `[0,1]`；`strength_schedule` 是绝对的每步 LoRA strength，可以是负数或大于 1。两者都使用英文逗号分隔，缺少的后续 step 使用最后一个值，多余值丢弃。
 
 ```text
 rank_schedule = 1,0.5,1,0
@@ -150,11 +150,7 @@ XCN_OscillationSchedule / XCN_MonotonicSchedule
 
 ## 值域与 step 语义
 
-所有用于 LoRA rank/strength 的值都限制在：
-
-```text
-0 <= value <= 1
-```
+`rank_schedule` 的值限制在 `[0,1]`；`strength_schedule` 不限制在 `[0,1]`，只要求是有限数字。
 
 周期型震荡采用离散 step 的半开区间采样，例如 4 步、2 周期的方波为：
 
